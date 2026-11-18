@@ -43,7 +43,8 @@ def _new_db(path: Path) -> None:
             category TEXT DEFAULT 'Overig',
             kind TEXT DEFAULT 'variabel',
             source TEXT DEFAULT '',
-            fingerprint TEXT UNIQUE
+            fingerprint TEXT UNIQUE,
+            afletterd INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS loonstroken (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,8 +60,39 @@ def _new_db(path: Path) -> None:
         CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category);
         """
     )
+    _migrate(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(transactions)")]
+    if "afletterd" not in cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN afletterd INTEGER DEFAULT 0")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS potjes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            naam TEXT NOT NULL,
+            doel REAL DEFAULT 0,
+            saldo REAL DEFAULT 0,
+            aangemaakt TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS potje_mutaties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            potje_id INTEGER NOT NULL,
+            mut_date TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT DEFAULT '',
+            FOREIGN KEY(potje_id) REFERENCES potjes(id)
+        )
+        """
+    )
+    conn.commit()
 
 
 def create_master(password: str) -> None:
@@ -88,6 +120,7 @@ def unlock(password: str) -> bool:
     _temp_path.write_bytes(plain)
     _conn = sqlite3.connect(_temp_path)
     _conn.row_factory = sqlite3.Row
+    _migrate(_conn)
     return True
 
 
@@ -176,6 +209,56 @@ def save_loonstrook(period: str, brutoloon: float, loonheffing: float,
             "VALUES (?,?,?,?,?,?)",
             (period, brutoloon, loonheffing, pensioen, vakantiegeld, source),
         )
+
+
+def toggle_afletterd(tx_id: int) -> bool:
+    row = q("SELECT afletterd FROM transactions WHERE id=?", (tx_id,))
+    if not row:
+        return False
+    new_val = 0 if row[0]["afletterd"] else 1
+    execute("UPDATE transactions SET afletterd=? WHERE id=?", (new_val, tx_id))
+    return bool(new_val)
+
+
+def set_afletterd_all(year: str, value: bool) -> int:
+    return execute(
+        "UPDATE transactions SET afletterd=? WHERE substr(tx_date,1,4)=?", (1 if value else 0, year))
+
+
+def potjes_list() -> list[sqlite3.Row]:
+    return q("SELECT * FROM potjes ORDER BY naam")
+
+
+def potje_add(naam: str, doel: float) -> int:
+    execute(
+        "INSERT INTO potjes (naam, doel, saldo, aangemaakt) VALUES (?,?,0,?)",
+        (naam, doel, stamp()[:10]),
+    )
+    return q("SELECT id FROM potjes WHERE naam=? ORDER BY id DESC", (naam,))[0]["id"]
+
+
+def potje_delete(potje_id: int) -> None:
+    execute("DELETE FROM potje_mutaties WHERE potje_id=?", (potje_id,))
+    execute("DELETE FROM potjes WHERE id=?", (potje_id,))
+
+
+def potje_mutate(potje_id: int, amount: float, note: str = "") -> None:
+    from datetime import datetime
+
+    execute(
+        "INSERT INTO potje_mutaties (potje_id, mut_date, amount, note) VALUES (?,?,?,?)",
+        (potje_id, datetime.now().strftime("%Y-%m-%d"), amount, note),
+    )
+    execute("UPDATE potjes SET saldo = saldo + ? WHERE id=?", (amount, potje_id))
+
+
+def potje_mutaties(potje_id: int) -> list[sqlite3.Row]:
+    return q(
+        "SELECT * FROM potje_mutaties WHERE potje_id=? ORDER BY mut_date DESC, id DESC", (potje_id,))
+
+
+def potjes_total() -> float:
+    return q("SELECT COALESCE(SUM(saldo),0) s FROM potjes")[0]["s"]
 
 
 def stamp() -> str:

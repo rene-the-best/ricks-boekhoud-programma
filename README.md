@@ -7,8 +7,10 @@ Een boekhoudprogramma voor thuis (particulier gebruik), in het blauw/matrixgroen
 - **Bankbestand inladen** — CAMT.053 (XML), CSV (NL-banken) en MT940 (.sta)
 - **Loonstrookjes (PDF) inladen** — waarden worden uit de PDF gelezen en kun je controleren; ook handmatig invullen
 - **Transacties overzicht** — filteren op jaar/categorie/type, per regel de categorie en vast/variabel aanpassen
+- **Afletteren** — vink transacties af (spatiebalk of dubbelklik), alles in één keer afletteren/kwisseren, filter op niet-afgeletterde regels
+- **Spaarpotjes** — eigen potjes per doel (vakantie, reserve, auto...) met storten, opnemen, historie en voortgangsbalk
 - **Kosteninzicht** — alle kostenposten met grafieken: per categorie, vast vs. variabel, gemiddelde vaste lasten p/m
-- **IB-aangifte uitwerking** — Box I (loon, loonheffing, hypotheekrenteaftrek, eigenwoningforfait) en Box III (banktegoeden), klaar in januari; CSV/Excel-export
+- **IB-aangifte uitwerking** — Box I (loon, loonheffing, hypotheekrenteaftrek, eigenwoningforfait) en Box III (banktegoeden + spaarpotjes), klaar in januari; CSV/Excel-export
 - **Rapporten** — transacties per jaar naar CSV exporteren
 - **Lokaal en versleuteld** — alles staat in één versleuteld bestand op je eigen pc (AES-256 via Fernet, wachtwoord → PBKDF2 300k iteraties). Niets gaat naar het internet.
 

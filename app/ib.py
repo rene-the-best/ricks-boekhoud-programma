@@ -49,8 +49,10 @@ def compute_year(year: str) -> dict:
         (year,)):
         saldo += r["s"]
     schulden = float(db.get_setting(f"schulden_{year}", "0") or 0)
+    potjes = db.potjes_total()
     box3_rows = [
         ("Bank- en spaartegoeden (eindsaldo 31-12)", saldo),
+        ("Spaarpotjes (opzij gezet)", potjes),
         ("Schulden", -abs(schulden)),
     ]
     box3_total = sum(v for _, v in box3_rows)
@@ -102,7 +104,7 @@ def export_transactions_csv(year: str) -> str:
 
 
 def maanden_met_data(year: str) -> int:
-    now = dbm.stamp()
+    now = db.stamp()
     current = int(now[:4])
     if int(year) != current:
         return 12
