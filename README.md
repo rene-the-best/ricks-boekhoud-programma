@@ -39,6 +39,18 @@ Werkt op Python 3.10 t/m 3.15 (en daarbuiten). Geen C++ Build Tools nodig.
 
 De IB-uitwerking is **indicatief** — geen belastingadvies. Gebruik de cijfers als voorbereiding voor je officiële aangifte en controleer ze in Mijn Belastingdienst.
 
+## Werkomgeving Rick (installeringsnotities)
+
+> Voor toekomstige sessies: dit is de werkomgeving van de gebruiker — houd hier rekening mee.
+
+- **Python**: 3.15 (64-bit) op Windows 10/11
+- **Starten via**: `py -m pip install -r requirements.txt` en daarna `py app\main.py` (gebruik `py`, niet `python`)
+- **UI**: Tkinter (stdio-bibliotheek) — géén NiceGUI/pyyaml gebruiken, die kunnen op zijn Python-versie compileren
+- **PDF**: pdfminer.six (pure Python) — géén pdfplumber
+- **Code-downloads**: zip pakt uit met een geneste map (map-in-map); de projectmap met `requirements.txt` ligt één niveau dieper
+- **Exe**: wordt gebouwd via GitHub Actions; downloaden via *Actions → run → Artifacts* (ingelogd op GitHub vereist)
+- **Data-map op Windows**: `%APPDATA%\RicksBoekhoudProgramma\` (versleuteld `data.enc`)
+
 ## Back-up
 
 Via **Instellingen → Back-up downloaden** haal je het versleutelde databestand op. Bewaar hem veilig; zonder je hoofdwachtwoord is de back-up leesbaar voor niemand.
