@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <Stmt>
+      <Id>STMT-2025-01</Id>
+      <Bal>
+        <Amt Ccy="EUR">5000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Date>2025-01-01</Date>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="EUR">62.40</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2025-01-02</Dt></BookgDt>
+        <ValDt><Dt>2025-01-02</Dt></ValDt>
+        <AddtlNtryInf>Albert Heijn 2456 PIN</AddtlNtryInf>
+        <NtryDtls>
+          <TxDtls>
+            <RmtInf><Ustrd>Boodschappen</Ustrd></RmtInf>
+            <RltdPties>
+              <Nm>Albert Heijn</Nm>
+            </RltdPties>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">2410.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2025-01-01</Dt></BookgDt>
+        <ValDt><Dt>2025-01-01</Dt></ValDt>
+        <AddtlNtryInf>Salaris Werkgever B.V.</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

@@ -1,0 +1,4 @@
+nicegui>=4.0,<5
+cryptography>=42
+pdfplumber>=0.11
+pywebview>=5
