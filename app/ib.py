@@ -99,3 +99,47 @@ def export_transactions_csv(year: str) -> str:
             f"{r['amount']:.2f}".replace(".", ","), r["category"], r["kind"],
         ])
     return buf.getvalue()
+
+
+def maanden_met_data(year: str) -> int:
+    now = dbm.stamp()
+    current = int(now[:4])
+    if int(year) != current:
+        return 12
+    return max(1, int(now[5:7]))
+
+
+def month_income(year: str) -> float:
+    return db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount>0", (year,))[0]["s"]
+
+
+def month_spend(year: str) -> float:
+    return abs(db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount<0", (year,))[0]["s"])
+
+
+def month_vast(year: str) -> float:
+    return db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount<0 AND kind='vast'", (year,))[0]["s"]
+
+
+def month_variabel(year: str) -> float:
+    return db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount<0 AND kind='variabel'", (year,))[0]["s"]
+
+
+def month_income_in(year: str, month: int) -> float:
+    return db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,7)=? AND amount>0", (f"{year}-{month:02d}",))[0]["s"]
+
+
+def month_spend_in(year: str, month: int) -> float:
+    return abs(db.q(
+        "SELECT COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,7)=? AND amount<0", (f"{year}-{month:02d}",))[0]["s"])

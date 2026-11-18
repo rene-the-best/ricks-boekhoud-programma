@@ -23,14 +23,17 @@ De bouw loopt automatisch via GitHub Actions (workflow `Bouw Windows exe`):
 
 > Soms waarschuwen Windows/SmartScreen bij onbekende exe's — normaal bij zelfgebouwde programma's: klik "Toch uitvoeren".
 
-## Zelf draaien (voor ontwikkelaars)
+## Zelf draaien met Python (ook Python 3.15)
+
+De interface is gebouwd met **Tkinter**, dat bij Python zelf zit — er zijn dus geen pakketten meer die een compiler (Microsoft C++ Build Tools) nodig hebben. Alleen dit:
 
 ```bash
-pip install -r requirements.txt
-python app/main.py            # natief venster
-python app/main.py -no-native # in de browser
-python -m pytest tests        # unit tests
+pip install -r requirements.txt   # cryptography + pdfminer.six, beide kant-en-klare pakketten
+python app/main.py
+python -m pytest tests            # unit tests
 ```
+
+Werkt op Python 3.10 t/m 3.15 (en daarbuiten). Geen C++ Build Tools nodig.
 
 ## Belangrijke kanttekening
 

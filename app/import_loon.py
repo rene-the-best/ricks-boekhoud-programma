@@ -11,13 +11,9 @@ MAANDEN = {
 def parse_loonstrook_pdf(pdf_bytes: bytes) -> dict:
     import io
 
-    import pdfplumber
+    from pdfminer.high_level import extract_text
 
-    text_parts = []
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page in pdf.pages:
-            text_parts.append(page.extract_text() or "")
-    text = "\n".join(text_parts)
+    text = extract_text(io.BytesIO(pdf_bytes))
     return parse_loonstrook_text(text, source="loonstrook.pdf")
 
 

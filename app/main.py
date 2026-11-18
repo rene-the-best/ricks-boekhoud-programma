@@ -3,8 +3,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from nicegui import app as nicegui_app
-from nicegui import ui
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
 import categorize
 import db as dbm
@@ -18,18 +18,19 @@ TEXT = "#D9E6F7"
 MUTED = "#7E97B8"
 CARD = "#13294B"
 PANEL = "#0F2240"
+DARK = "#081220"
 BORDER = "#1C3A63"
 RED = "#FF5D73"
 
 MENU = [
-    ("/", "Dashboard"),
-    ("/transacties", "Transacties"),
-    ("/import", "Import / Upload"),
-    ("/kosten", "Kosteninzicht"),
-    ("/loon", "Loonstrookjes"),
-    ("/ib", "IB-aangifte"),
-    ("/rapporten", "Rapporten"),
-    ("/instellingen", "Instellingen"),
+    ("Dashboard", "dashboard"),
+    ("Transacties", "transacties"),
+    ("Import / Upload", "import"),
+    ("Kosteninzicht", "kosten"),
+    ("Loonstrookjes", "loon"),
+    ("IB-aangifte", "ib"),
+    ("Rapporten", "rapporten"),
+    ("Instellingen", "instellingen"),
 ]
 
 YEARS = ["2024", "2025", "2026"]
@@ -40,663 +41,810 @@ def eur(value: float) -> str:
     return f"€ {s}"
 
 
-def scaffold(active: str):
-    ui.add_head_html(f"""
-    <style>
-      body {{ background: {PANEL} !important; }}
-      .q-drawer {{ background: #0B1B30 !important; border-right: 1px solid {BORDER} !important; }}
-      .q-header {{ background: #0A1522 !important; }}
-      .q-table {{ background: {CARD} !important; }}
-    </style>
-    """)
-    ui.dark_mode(True)
-    with ui.left_drawer(value=True, fixed=True, elevated=False).classes("w-56"):
-        with ui.column().classes("gap-1 pt-2"):
-            with ui.row().classes("items-center gap-2 mb-4 px-2"):
-                ui.icon("account_balance").classes(f"text-[{GREEN}]")
-                ui.label("RICK'S BOEKHOUD").classes(f"text-[{GREEN}] font-bold")
-            for path, label in MENU:
-                if path == active:
-                    ui.button(label, icon="chevron_right", on_click=lambda p=path: ui.navigate.to(p)) \
-                        .props(f'flat no-caps align=left').classes(
-                        f"w-full text-[{GREEN}] font-semibold bg-[#153055] border border-[{GREEN}]")
-                else:
-                    ui.button(label, icon=None, on_click=lambda p=path: ui.navigate.to(p)) \
-                        .props("flat no-caps align=left").classes("w-full text-[#D9E6F7]")
-    with ui.header().classes("items-center justify-between h-12"):
-        ui.label("Rick's Boekhoud Programma").classes("font-bold")
-        ui.label(f"Lokaal versleuteld — SQLite").classes(f"text-[{GREEN}] text-xs")
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Rick's Boekhoud Programma")
+        self.geometry("1280x720")
+        self.minsize(1100, 640)
+        self.configure(bg=DARK)
+        self.menu_buttons: dict[str, tk.Button] = {}
+        self.show_lock()
 
-
-def kpi_card(label: str, value: str, sub: str = "", color: str = TEXT):
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow min-w-[200px] flex-1") \
-            .style("border-radius:10px"):
-        ui.label(label).classes("text-xs text-[#7E97B8] tracking-wider")
-        ui.label(value).classes("text-2xl font-bold mt-1")
-        if sub:
-            ui.label(sub).classes("text-xs").style(f"color:{color}")
-
-
-def panel(title: str):
-    with ui.card().classes(f"w-full bg-[{CARD}] border border-[{BORDER}] no-shadow") \
-            .style("border-radius:10px"):
-        ui.label(title).classes("font-bold text-base mb-1")
-        return ui.column().classes("w-full gap-0")
-
-
-# ------------------------- lock screen -------------------------
-
-@ui.page("/lock")
-def lock_page(set_new: bool = False):
-    ui.add_head_html(f"<style>body{{background:{PANEL} !important;}}</style>")
-    ui.dark_mode(True)
-    with ui.column().classes("absolute-center items-center gap-4"):
-        ui.icon("lock").classes("text-6xl").style(f"color:{GREEN}")
-        ui.label("Rick's Boekhoud Programma").classes("text-2xl font-bold")
-        if set_new or not dbm.has_master():
-            ui.label("Stel een hoofdwachtwoord in. Dit versleutelt al je data lokaal (AES-256).") \
-                .classes("text-sm text-[#7E97B8]")
-            pw1 = ui.input("Nieuw hoofdwachtwoord", password=True, password_toggle_button=True) \
-                .classes("w-72")
-            pw2 = ui.input("Herhaal hoofdwachtwoord", password=True, password_toggle_button=True) \
-                .classes("w-72")
+    # ---------------- lock / hoofdwachtwoord ----------------
+    def show_lock(self, set_new: bool | None = None):
+        for w in self.winfo_children():
+            w.destroy()
+        frame = tk.Frame(self, bg=DARK)
+        frame.place(relx=0.5, rely=0.5, anchor="center")
+        tk.Label(frame, text="●", font=("Segoe UI", 20, "bold"), fg=GREEN, bg=DARK).pack()
+        tk.Label(frame, text="RICK'S BOEKHOUD PROGRAMMA", font=("Segoe UI", 16, "bold"),
+                 fg=TEXT, bg=DARK).pack(pady=(0, 6))
+        set_new = set_new if set_new is not None else not dbm.has_master()
+        if set_new:
+            tk.Label(frame, text="Stel een hoofdwachtwoord in.\nDit versleutelt al je data lokaal (AES-256).",
+                     fg=MUTED, bg=DARK, font=("Segoe UI", 10), justify="left").pack(pady=(0, 10))
+            pw1 = tk.Entry(frame, show="●", width=32, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                           relief="flat", bd=6)
+            pw2 = tk.Entry(frame, show="●", width=32, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                           relief="flat", bd=6)
+            pw1.pack(ipady=2)
+            pw2.pack(pady=(6, 10), ipady=2)
+            pw1.focus_set()
 
             def create():
-                if len(pw1.value) < 8:
-                    ui.notify("Kies minimaal 8 tekens.", type="warning")
+                if len(pw1.get()) < 8:
+                    messagebox.showwarning("Te kort", "Kies minimaal 8 tekens.")
                     return
-                if pw1.value != pw2.value:
-                    ui.notify("Wachtwoorden zijn niet gelijk.", type="warning")
+                if pw1.get() != pw2.get():
+                    messagebox.showwarning("Niet gelijk", "De wachtwoorden zijn niet gelijk.")
                     return
-                dbm.create_master(pw1.value)
-                ui.notify("Versleutelde databank aangemaakt.", type="positive")
-                ui.navigate.to("/")
-            ui.button("Start", on_click=create).props("unelevated").classes("w-72").style(
-                f"background:{GREEN};color:#062318")
+                dbm.create_master(pw1.get())
+                self.show_main()
+            tk.Button(frame, text="Start", command=create, bg=GREEN, fg="#062318",
+                      font=("Segoe UI", 10, "bold"), relief="flat", width=30).pack(ipady=3)
         else:
-            ui.label("Voer je hoofdwachtwoord in om de databank te openen.") \
-                .classes("text-sm text-[#7E97B8]")
-            pw = ui.input("Hoofdwachtwoord", password=True, password_toggle_button=True).classes("w-72")
+            tk.Label(frame, text="Voer je hoofdwachtwoord in.", fg=MUTED, bg=DARK,
+                     font=("Segoe UI", 10)).pack(pady=(0, 10))
+            pw = tk.Entry(frame, show="●", width=32, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                          relief="flat", bd=6)
+            pw.pack(ipady=2)
 
-            def unlock():
-                if dbm.unlock(pw.value):
-                    ui.notify("Databank geopend.", type="positive")
-                    ui.navigate.to("/")
+            def unlock(event=None):
+                if dbm.unlock(pw.get()):
+                    self.show_main()
                 else:
-                    ui.notify("Verkeerd wachtwoord.", type="negative")
-            pw.on("keydown.enter", unlock)
-            ui.button("Openen", on_click=unlock).props("unelevated").classes("w-72").style(
-                f"background:{GREEN};color:#062318")
+                    messagebox.showerror("Fout", "Verkeerd wachtwoord.")
+            pw.bind("<Return>", unlock)
+            tk.Button(frame, text="Openen", command=unlock, bg=GREEN, fg="#062318",
+                      font=("Segoe UI", 10, "bold"), relief="flat", width=30).pack(pady=(10, 0), ipady=3)
+            pw.focus_set()
 
+    # ---------------- hoofdscherm ----------------
+    def show_main(self):
+        for w in self.winfo_children():
+            w.destroy()
+        sidebar = tk.Frame(self, bg="#0B1B30", width=220)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+        header = tk.Frame(self, bg="#0A1522", height=36)
+        header.pack(side="top", fill="x")
+        header.pack_propagate(False)
+        tk.Label(header, text="RICK'S BOEKHOUD PROGRAMMA", font=("Segoe UI", 10, "bold"),
+                 fg=TEXT, bg="#0A1522").pack(side="left", padx=14)
+        tk.Label(header, text="Lokaal versleuteld — SQLite", font=("Segoe UI", 9),
+                 fg=GREEN, bg="#0A1522").pack(side="right", padx=14)
+        self.content = tk.Frame(self, bg=PANEL)
+        self.content.pack(side="right", fill="both", expand=True)
 
-# ------------------------- dashboard -------------------------
+        logo_row = tk.Frame(sidebar, bg="#0B1B30")
+        logo_row.pack(fill="x", pady=(14, 10))
+        tk.Label(logo_row, text="●", font=("Segoe UI", 11, "bold"), fg=GREEN,
+                 bg="#0B1B30").pack(side="left", padx=(16, 6))
+        tk.Label(logo_row, text="MENU", font=("Segoe UI", 10, "bold"), fg=GREEN,
+                 bg="#0B1B30").pack(side="left")
+        for label, key in MENU:
+            btn = tk.Button(sidebar, text=label, anchor="w", relief="flat", bd=0,
+                            font=("Segoe UI", 10), bg="#0B1B30", fg=TEXT, padx=18, pady=8,
+                            activebackground="#153055", activeforeground=GREEN,
+                            command=lambda k=key: self.navigate(k))
+            btn.pack(fill="x", padx=6, pady=1)
+            self.menu_buttons[key] = btn
+        tk.Button(sidebar, text="Vergrendelen", anchor="w", relief="flat", bd=0,
+                  font=("Segoe UI", 9), bg="#0B1B30", fg=MUTED, padx=18, pady=6,
+                  activebackground="#153055",
+                  command=self.lock_now).pack(side="bottom", fill="x")
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.navigate("dashboard")
 
-@ui.page("/")
-def dashboard():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/")
-    year_state = {"year": dbm.get_setting("huidig_jaar", "2025")}
+    def lock_now(self):
+        dbm.lock_down()
+        self.show_lock()
 
-    ui.label("Dashboard").classes("text-2xl font-bold mt-2")
-    year_sel = ui.select(YEARS, value=year_state["year"], label="Belastingjaar",
-                         on_change=lambda e: on_year(e.value)).classes("w-40")
+    def navigate(self, key: str):
+        for k, btn in self.menu_buttons.items():
+            if k == key:
+                btn.configure(bg="#153055", fg=GREEN, font=("Segoe UI", 10, "bold"))
+            else:
+                btn.configure(bg="#0B1B30", fg=TEXT, font=("Segoe UI", 10))
+        for w in self.content.winfo_children():
+            w.destroy()
+        page = {
+            "dashboard": self.page_dashboard,
+            "transacties": self.page_transacties,
+            "import": self.page_import,
+            "kosten": self.page_kosten,
+            "loon": self.page_loon,
+            "ib": self.page_ib,
+            "rapporten": self.page_rapporten,
+            "instellingen": self.page_instellingen,
+        }[key]
+        page(self.content)
 
-    content = ui.column().classes("w-full gap-3 pb-8")
+    # ---------------- kleine bouwstenen ----------------
+    def title_bar(self, parent, title, subtitle=""):
+        top = tk.Frame(parent, bg=PANEL)
+        top.pack(fill="x", padx=16, pady=(14, 6))
+        tk.Label(top, text=title, font=("Segoe UI", 16, "bold"), fg=TEXT, bg=PANEL) \
+            .pack(side="left")
+        if subtitle:
+            tk.Label(top, text=subtitle, font=("Segoe UI", 9), fg=MUTED, bg=PANEL) \
+                .pack(side="left", padx=14)
+        return top
 
-    def on_year(y):
-        year_state["year"] = y
-        dbm.set_setting("huidig_jaar", y)
-        content.clear()
-        build(content, year_state["year"])
+    def card(self, parent, **pack):
+        frame = tk.Frame(parent, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
+        frame.pack(**pack)
+        return frame
 
-    def build(c, year):
-        y = year
-        tx = dbm.q(
-            "SELECT amount FROM transactions WHERE substr(tx_date,1,4)=? AND kind='inkomsten'", (y,))
-        inkomen = sum(r["amount"] for r in tx)
-        uitgaven = abs(sum(r["amount"] for r in dbm.q(
-            "SELECT amount FROM transactions WHERE substr(tx_date,1,4)=? AND amount<0", (y,))))
-        vast = dbm.q(
-            "SELECT COALESCE(SUM(amount),0) s FROM transactions "
-            "WHERE substr(tx_date,1,4)=? AND amount<0 AND kind='vast'", (y,))[0]["s"]
-        variabel = dbm.q(
-            "SELECT COALESCE(SUM(amount),0) s FROM transactions "
-            "WHERE substr(tx_date,1,4)=? AND amount<0 AND kind='variabel'", (y,))[0]["s"]
-        with c:
-            with ui.row().classes("w-full gap-3 flex-wrap"):
-                kpi_card("TOTAAL SALDO", eur(inkomen - uitgaven), "inkomsten - uitgaven", GREEN)
-                kpi_card(f"INKOMMEN {y}", eur(inkomen), "loon + overig", TEXT)
-                kpi_card(f"UITGAVEN {y}", eur(uitgaven), "alle kostenposten", RED)
-                kpi_card(f"VASTE LASTEN P/M {y}", eur(vast / max(1, _maanden(y))),
-                         f"variabel: {eur(abs(variabel) / max(1, _maanden(y)))}", MUTED)
-            with ui.row().classes("w-full gap-3 flex-wrap"):
-                with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow flex-1 min-w-[420px]") \
-                        .style("border-radius:10px"):
-                    ui.label("Inkomsten vs. Uitgaven per maand").classes("font-bold")
-                    months = [f"{y}-{m:02d}" for m in range(1, 13)]
-                    inc = [month_sum(y, m, ">0") for m in range(1, 13)]
-                    out = [abs(month_sum(y, m, "<0")) for m in range(1, 13)]
-                    ui.echart({
-                        "backgroundColor": "transparent",
-                        "grid": {"left": 50, "right": 20, "top": 30, "bottom": 30},
-                        "xAxis": {"type": "category",
-                                  "data": ["jan", "feb", "mrt", "apr", "mei", "jun",
-                                           "jul", "aug", "sep", "okt", "nov", "dec"],
-                                  "axisLabel": {"color": MUTED},
-                                  "axisLine": {"lineStyle": {"color": BORDER}}},
-                        "yAxis": {"type": "value", "axisLabel": {"color": MUTED},
-                                  "splitLine": {"lineStyle": {"color": BORDER, "opacity": 0.5}}},
-                        "series": [
-                            {"name": "Inkomsten", "type": "line", "data": inc, "smooth": True,
-                             "lineStyle": {"color": GREEN}, "itemStyle": {"color": GREEN},
-                             "areaStyle": {"color": GREEN, "opacity": 0.12}},
-                            {"name": "Uitgaven", "type": "line", "data": out, "smooth": True,
-                             "lineStyle": {"color": BLUE}, "itemStyle": {"color": BLUE},
-                             "areaStyle": {"color": BLUE, "opacity": 0.18}},
-                        ],
-                        "legend": {"textStyle": {"color": TEXT}, "top": 0},
-                        "tooltip": {"trigger": "axis"},
-                    }).classes("w-full h-64")
-                with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow min-w-[320px]") \
-                        .style("border-radius:10px"):
-                    ui.label("Vast vs. Variabel").classes("font-bold")
-                    ui.echart({
-                        "backgroundColor": "transparent",
-                        "series": [{
-                            "type": "pie", "radius": ["55%", "80%"],
-                            "label": {"color": TEXT},
-                            "data": [
-                                {"name": "Vast", "value": round(abs(vast), 2),
-                                 "itemStyle": {"color": GREEN}},
-                                {"name": "Variabel", "value": round(abs(variabel), 2),
-                                 "itemStyle": {"color": BLUE}},
-                            ],
-                        }],
-                        "legend": {"bottom": 0, "textStyle": {"color": TEXT}},
-                    }).classes("w-full h-64")
-            with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full") \
-                    .style("border-radius:10px"):
-                ui.label(f"Grootste kostenposten {y}").classes("font-bold")
-                cats = dbm.q(
-                    "SELECT category, COALESCE(SUM(amount),0) s FROM transactions "
-                    "WHERE substr(tx_date,1,4)=? AND amount<0 GROUP BY category ORDER BY s LIMIT 8",
-                    (y,))
-                labels = [r["category"] for r in cats]
-                values = [abs(r["s"]) for r in cats]
-                ui.echart({
-                    "backgroundColor": "transparent",
-                    "grid": {"left": 150, "right": 40, "top": 10, "bottom": 20},
-                    "xAxis": {"type": "value", "axisLabel": {"color": MUTED},
-                              "splitLine": {"show": False}},
-                    "yAxis": {"type": "category", "data": labels[::-1],
-                              "axisLabel": {"color": TEXT},
-                              "axisLine": {"lineStyle": {"color": BORDER}}},
-                    "series": [{"type": "bar", "data": values[::-1], "barWidth": 14,
-                                "itemStyle": {"color": GREEN, "borderRadius": 7}}],
-                    "tooltip": {"trigger": "axis"},
-                }).classes("w-full h-72")
+    def kpi(self, parent, label, value, sub="", color=TEXT):
+        box = self.card(parent)
+        box.pack(side="left", fill="both", expand=True, padx=6, pady=6)
+        box.configure(padx=14, pady=10)
+        tk.Label(box, text=label, font=("Segoe UI", 8, "bold"), fg=MUTED, bg=CARD) \
+            .pack(anchor="w")
+        tk.Label(box, text=value, font=("Segoe UI", 18, "bold"), fg=TEXT, bg=CARD) \
+            .pack(anchor="w", pady=(2, 0))
+        if sub:
+            tk.Label(box, text=sub, font=("Segoe UI", 8), fg=color, bg=CARD).pack(anchor="w")
+        return box
 
-    build(content, year_state["year"])
+    def green_button(self, parent, text, command, **pack):
+        btn = tk.Button(parent, text=text, command=command, bg=GREEN, fg="#062318",
+                        font=("Segoe UI", 9, "bold"), relief="flat", padx=16, pady=6,
+                        activebackground="#00c47c", activeforeground="#062318", cursor="hand2")
+        btn.pack(**pack)
+        return btn
 
+    # ---------------- pagina: dashboard ----------------
+    def page_dashboard(self, root):
+        self.title_bar(root, "Dashboard", "Belastingjaar-overzicht")
+        year = dbm.get_setting("huidig_jaar", "2025")
+        row = tk.Frame(root, bg=PANEL)
+        row.pack(fill="x", padx=10)
+        inkomen = ib.month_income(year)
+        uitgaven = ib.month_spend(year)
+        vast = ib.month_vast(year)
+        variabel = ib.month_variabel(year)
+        maanden = ib.maanden_met_data(year)
+        self.kpi(row, "TOTAAL SALDO", eur(inkomen - uitgaven), "inkomsten - uitgaven", GREEN)
+        self.kpi(row, f"INKOMMEN {year}", eur(inkomen), "loon + overig")
+        self.kpi(row, f"UITGAVEN {year}", eur(uitgaven), "alle kostenposten", RED)
+        self.kpi(row, f"VASTE LASTEN P/M {year}", eur(vast / max(1, maanden)),
+                 f"variabel: {eur(abs(variabel) / max(1, maanden))}", MUTED)
 
-def _maanden(year: str) -> int:
-    now = dbm.stamp()
-    current = int(now[:4])
-    if int(year) > current:
-        return 12
-    if int(year) < current:
-        return 12
-    return max(1, int(now[5:7]))
+        charts_row = tk.Frame(root, bg=PANEL)
+        charts_row.pack(fill="both", expand=True, padx=10, pady=6)
+        c1 = self.card(charts_row)
+        c1.pack(side="left", fill="both", expand=True, padx=6)
+        tk.Label(c1, text="Inkomsten vs. Uitgaven per maand", font=("Segoe UI", 10, "bold"),
+                 fg=TEXT, bg=CARD).pack(anchor="w", padx=14, pady=(10, 0))
+        canvas_line = tk.Canvas(c1, bg=CARD, highlightthickness=0, height=230)
+        canvas_line.pack(fill="both", expand=True, padx=10, pady=6)
+        draw_line_chart(canvas_line, year)
 
+        c2 = self.card(charts_row)
+        c2.pack(side="left", fill="y", padx=6)
+        c2.configure(width=340)
+        tk.Label(c2, text="Vast vs. Variabel", font=("Segoe UI", 10, "bold"), fg=TEXT,
+                 bg=CARD).pack(anchor="w", padx=14, pady=(10, 0))
+        canvas_donut = tk.Canvas(c2, bg=CARD, highlightthickness=0, height=200, width=320)
+        canvas_donut.pack(padx=10, pady=6)
+        draw_donut(canvas_donut, abs(vast), abs(variabel))
 
-def month_sum(year: str, month: int, direction: str) -> float:
-    rows = dbm.q(
-        f"SELECT COALESCE(SUM(amount),0) s FROM transactions "
-        f"WHERE substr(tx_date,1,7)=? AND amount{direction}",
-        (f"{year}-{month:02d}",))
-    return rows[0]["s"]
+        c3 = self.card(root)
+        c3.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+        tk.Label(c3, f"Grootste kostenposten {year}", font=("Segoe UI", 10, "bold"), fg=TEXT,
+                 bg=CARD).pack(anchor="w", padx=14, pady=(10, 0))
+        canvas_bar = tk.Canvas(c3, bg=CARD, highlightthickness=0, height=180)
+        canvas_bar.pack(fill="both", expand=True, padx=10, pady=6)
+        draw_top_categories(canvas_bar, year)
 
+    # ---------------- pagina: transacties ----------------
+    def page_transacties(self, root):
+        self.title_bar(root, "Transacties", "Klik op een regel om categorie/type aan te passen")
+        controls = tk.Frame(root, bg=PANEL)
+        controls.pack(fill="x", padx=16, pady=4)
+        years = [r[0] for r in dbm.q(
+            "SELECT DISTINCT substr(tx_date,1,4) FROM transactions ORDER BY 1")] or ["2025"]
+        state = {"year": dbm.get_setting("huidig_jaar", "2025"), "cat": "", "kind": ""}
 
-# ------------------------- transacties -------------------------
+        tk.Label(controls, text="Jaar:", fg=MUTED, bg=PANEL, font=("Segoe UI", 9)) \
+            .pack(side="left")
+        year_box = ttk.Combobox(controls, values=years, width=8, state="readonly")
+        year_box.set(state["year"])
+        year_box.pack(side="left", padx=(6, 16))
+        tk.Label(controls, text="Categorie:", fg=MUTED, bg=PANEL, font=("Segoe UI", 9)) \
+            .pack(side="left")
+        cat_box = ttk.Combobox(controls, values=["(alle)"] + categorize.all_categories(),
+                               width=22, state="readonly")
+        cat_box.set("(alle)")
+        cat_box.pack(side="left", padx=(6, 16))
+        tk.Label(controls, text="Type:", fg=MUTED, bg=PANEL, font=("Segoe UI", 9)).pack(side="left")
+        kind_box = ttk.Combobox(controls, values=["(alle)", "vast", "variabel", "inkomsten"],
+                                width=10, state="readonly")
+        kind_box.set("(alle)")
+        kind_box.pack(side="left", padx=6)
 
-@ui.page("/transacties")
-def transacties():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/transacties")
-    ui.label("Transacties").classes("text-2xl font-bold mt-2")
-    years = [r[0] for r in dbm.q("SELECT DISTINCT substr(tx_date,1,4) FROM transactions ORDER BY 1")] \
-        or ["2025"]
-    state = {"year": dbm.get_setting("huidig_jaar", "2025"), "cat": "", "kind": ""}
-    cat_options = categorize.all_categories()
-    flt_year = ui.select(years, value=state["year"], label="Jaar", on_change=lambda e: refresh()).classes("w-32")
-    flt_cat = ui.select(cat_options, value=None, label="Categorie", with_input=True,
-                        on_change=lambda e: refresh()).classes("w-56")
-    flt_kind = ui.select(["vast", "variabel", "inkomsten"], value=None, label="Type",
-                         on_change=lambda e: refresh()).classes("w-40")
+        wrap = tk.Frame(root, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
+        wrap.pack(fill="both", expand=True, padx=16, pady=8)
+        cols = ("datum", "omschrijving", "tegenrekening", "bedrag", "categorie", "type")
+        table = ttk.Treeview(wrap, columns=cols, show="headings", selectmode="browse")
+        for cid, text, w, anchor in (
+            ("datum", "Datum", 90, "w"), ("omschrijving", "Omschrijving", 320, "w"),
+            ("tegenrekening", "Tegenrekening", 160, "w"), ("bedrag", "Bedrag", 110, "e"),
+            ("categorie", "Categorie", 170, "w"), ("type", "Type", 90, "e"),
+        ):
+            table.heading(cid, text=text)
+            table.column(cid, width=w, anchor=anchor)
+        scrollbar = ttk.Scrollbar(wrap, orient="vertical", command=table.yview)
+        table.configure(yscrollcommand=scrollbar.set)
+        table.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        style_table(table)
 
-    columns = [
-        {"name": "datum", "label": "Datum", "field": "datum", "align": "left"},
-        {"name": "omschrijving", "label": "Omschrijving", "field": "omschrijving", "align": "left"},
-        {"name": "tegenrekening", "label": "Tegenrekening", "field": "tegenrekening", "align": "left"},
-        {"name": "bedrag", "label": "Bedrag", "field": "bedrag", "align": "right"},
-        {"name": "categorie", "label": "Categorie", "field": "categorie", "align": "left"},
-        {"name": "type", "label": "Type", "field": "type", "align": "left"},
-    ]
+        status = tk.Label(root, text="", fg=MUTED, bg=PANEL, font=("Segoe UI", 9), anchor="w")
+        status.pack(fill="x", padx=18)
 
-    table = ui.table(columns=columns, rows=[], row_key="id", pagination=20) \
-        .classes("w-full").props("dark flat")
+        def refresh():
+            nonlocal state
+            state["year"] = year_box.get()
+            state["cat"] = "" if cat_box.get() == "(alle)" else cat_box.get()
+            state["kind"] = "" if kind_box.get() == "(alle)" else kind_box.get()
+            table.delete(*table.get_children())
+            sql = ("SELECT id, tx_date, description, contra_account, amount, category, kind "
+                   "FROM transactions WHERE substr(tx_date,1,4)=?")
+            params: list = [state["year"]]
+            if state["cat"]:
+                sql += " AND category=?"; params.append(state["cat"])
+            if state["kind"]:
+                sql += " AND kind=?"; params.append(state["kind"])
+            sql += " ORDER BY tx_date DESC"
+            total_out = 0.0
+            for r in dbm.q(sql, tuple(params)):
+                values = (r["tx_date"], r["description"][:60], r["contra_account"][:22],
+                          eur(r["amount"]), r["category"], r["kind"])
+                tag = "in" if r["amount"] >= 0 else "out"
+                table.insert("", "end", iid=str(r["id"]), values=values, tags=(tag,))
+                if r["amount"] < 0:
+                    total_out += r["amount"]
+            status.config(text=f"{len(table.get_children())} transacties  |  "
+                               f"uitgaven: {eur(total_out)}")
+        year_box.bind("<<ComboboxSelected>>", lambda e: refresh())
+        cat_box.bind("<<ComboboxSelected>>", lambda e: refresh())
+        kind_box.bind("<<ComboboxSelected>>", lambda e: refresh())
 
-    def refresh():
-        rows_sql = ("SELECT id, tx_date, description, contra_account, amount, category, kind "
-                    "FROM transactions WHERE substr(tx_date,1,4)=?")
-        params: list = [state["year"]]
-        if state["cat"]:
-            rows_sql += " AND category=?"
-            params.append(state["cat"])
-        if state["kind"]:
-            rows_sql += " AND kind=?"
-            params.append(state["kind"])
-        data = []
-        for r in dbm.q(rows_sql, tuple(params)):
-            data.append({
-                "id": r["id"],
-                "datum": r["tx_date"],
-                "omschrijving": r["description"],
-                "tegenrekening": r["contra_account"],
-                "bedrag": eur(r["amount"]),
-                "categorie": r["category"],
-                "type": r["kind"],
-                "_amount": r["amount"],
-            })
-        table.rows = data
-        table.update()
+        def edit(event):
+            sel = table.selection()
+            if not sel:
+                return
+            tx_id = sel[0]
+            row = dbm.q("SELECT * FROM transactions WHERE id=?", (int(tx_id),))[0]
+            dialog = tk.Toplevel(self)
+            dialog.title("Transactie aanpassen")
+            dialog.configure(bg=PANEL)
+            dialog.geometry("420x300")
+            dialog.transient(self)
+            tk.Label(dialog, text=row["description"][:60], fg=MUTED, bg=PANEL,
+                     font=("Segoe UI", 9), wraplength=380).pack(anchor="w", padx=16, pady=(16, 4))
+            tk.Label(dialog, text="Datum: " + row["tx_date"] + "   Bedrag: " + eur(row["amount"]),
+                     fg=TEXT, bg=PANEL, font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=16)
+            tk.Label(dialog, text="Categorie:", fg=MUTED, bg=PANEL, font=("Segoe UI", 9)) \
+                .pack(anchor="w", padx=16, pady=(14, 0))
+            cat_sel = ttk.Combobox(dialog, values=categorize.all_categories(),
+                                   state="readonly", width=28)
+            cat_sel.set(row["category"])
+            cat_sel.pack(anchor="w", padx=16)
+            tk.Label(dialog, text="Type:", fg=MUTED, bg=PANEL, font=("Segoe UI", 9)) \
+                .pack(anchor="w", padx=16, pady=(10, 0))
+            kind_sel = ttk.Combobox(dialog, values=categorize.KINDS, state="readonly", width=28)
+            kind_sel.set(row["kind"])
+            kind_sel.pack(anchor="w", padx=16)
 
-    def on_year_selected(e):
-        state["year"] = e.value
-        refresh()
-
-    flt_year.on_value_change(lambda e: on_year_selected(e))
-    flt_cat.on_value_change(lambda e: (state.__setitem__("cat", e.value or ""), refresh()))
-    flt_kind.on_value_change(lambda e: (state.__setitem__("kind", e.value or ""), refresh()))
-
-    def edit_row(e):
-        payload = e.args[0] if isinstance(e.args, tuple) else e.args
-        row = next((r for r in table.rows
-                    if r["id"] == (payload if isinstance(payload, int) else payload["id"])), None)
-        if not row:
-            return
-        with ui.dialog() as dlg, ui.card().classes(f"bg-[{PANEL}] text-[{TEXT}]"):
-            ui.label("Transactie aanpassen").classes("font-bold")
-            ui.label(row["omschrijving"]).classes("text-sm text-[#7E97B8]")
-            cat_sel = ui.select(cat_options, value=row["categorie"]).classes("w-full")
-            kind_sel = ui.select(categorize.KINDS, value=row["type"]).classes("w-full")
             def save():
                 dbm.execute("UPDATE transactions SET category=?, kind=? WHERE id=?",
-                            (cat_sel.value, kind_sel.value, row["id"]))
-                dlg.close()
+                            (cat_sel.get(), kind_sel.get(), int(tx_id)))
+                dialog.destroy()
                 refresh()
-                ui.notify("Aangepast.", type="positive")
-            with ui.row():
-                ui.button("Opslaan", on_click=save).props("unelevated").style(
-                    f"background:{GREEN};color:#062318")
-                ui.button("Annuleren", on_click=dlg.close).props("flat")
-        dlg.open()
+                messagebox.showinfo("Opgeslagen", "Wijziging bewaard.", parent=self)
+            self.green_button(dialog, "Opslaan", save).pack(pady=18)
+        table.bind("<Double-1>", edit)
+        refresh()
 
-    table.on("row-click", edit_row)
-    refresh()
+    # ---------------- pagina: import ----------------
+    def page_import(self, root):
+        self.title_bar(root, "Import / Upload",
+                       "Bankbestand (CAMT.053 / CSV / MT940) en loonstroken (PDF)")
+        row = tk.Frame(root, bg=PANEL)
+        row.pack(fill="x", padx=16, pady=6)
+        c1 = self.card(row)
+        c1.pack(side="left", fill="both", expand=True, padx=6, ipady=16, ipadx=10)
+        tk.Label(c1, text="BANKBESTAND", font=("Segoe UI", 9, "bold"), fg=GREEN, bg=CARD) \
+            .pack(anchor="w", padx=16)
+        tk.Label(c1, text="Importeren voor transacties", font=("Segoe UI", 12, "bold"),
+                 fg=TEXT, bg=CARD).pack(anchor="w", padx=16, pady=(2, 0))
+        tk.Label(c1, text="CAMT.053 (XML)  |  CSV  |  MT940", font=("Segoe UI", 9), fg=MUTED,
+                 bg=CARD).pack(anchor="w", padx=16)
+        self.green_button(c1, "Bestand kiezen...", self.pick_bank).pack(anchor="w", padx=16, pady=(14, 0))
 
+        c2 = self.card(row)
+        c2.pack(side="left", fill="both", expand=True, padx=6, ipady=16, ipadx=10)
+        tk.Label(c2, text="LOONSTROOK / JAARINFORMATIE", font=("Segoe UI", 9, "bold"),
+                 fg=BLUE, bg=CARD).pack(anchor="w", padx=16)
+        tk.Label(c2, text="PDF van je werkgever inlezen", font=("Segoe UI", 12, "bold"),
+                 fg=TEXT, bg=CARD).pack(anchor="w", padx=16, pady=(2, 0))
+        tk.Label(c2, text="Cijfers gaan automatisch naar de IB-aangifte", font=("Segoe UI", 9),
+                 fg=MUTED, bg=CARD).pack(anchor="w", padx=16)
+        self.green_button(c2, "PDF kiezen...", self.pick_loon).pack(anchor="w", padx=16, pady=(14, 0))
 
-# ------------------------- import -------------------------
+        c3 = self.card(root)
+        c3.pack(fill="both", expand=True, padx=16, pady=8)
+        tk.Label(c3, text="LAATSTE IMPORT", font=("Segoe UI", 9, "bold"), fg=MUTED, bg=CARD) \
+            .pack(anchor="w", padx=16, pady=(10, 2))
+        tk.Label(c3, text=dbm.stamp(), font=("Segoe UI", 9), fg=MUTED, bg=CARD) \
+            .pack(anchor="w", padx=16)
 
-@ui.page("/import")
-def import_page():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/import")
-    ui.label("Import / Upload").classes("text-2xl font-bold mt-2")
-    with ui.row().classes("w-full gap-3 flex-wrap"):
-        with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow flex-1 min-w-[380px]") \
-                .style("border-radius:10px"):
-            ui.badge("BANKBESTAND", color="transparent").style(f"color:{GREEN};background:none")
-            ui.label("Importeren voor transacties").classes("text-lg font-bold")
-            ui.label("CAMT.053 (XML) • CSV • MT940").classes("text-sm text-[#7E97B8]")
-            upload = ui.upload(on_upload=handle_bank, multiple=True, auto_upload=True) \
-                .props("accept=.xml,.csv,.sta,.940,.txt,.mt940 dark").classes("w-full mt-2")
-        with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow flex-1 min-w-[380px]") \
-                .style("border-radius:10px"):
-            ui.badge("LOONSTROOK / JAARINFORMATIE", color="transparent").style(
-                f"color:{BLUE};background:none")
-            ui.label("PDF van je werkgever inlezen").classes("text-lg font-bold")
-            ui.label("Cijfers gaan automatisch naar IB-aangifte").classes("text-sm text-[#7E97B8]")
-            upload2 = ui.upload(on_upload=handle_loon, multiple=True, auto_upload=True) \
-                .props("accept=.pdf dark").classes("w-full mt-2")
-    ui.separator()
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full") \
-            .style("border-radius:10px"):
-        ui.label("LAATSTE IMPORT").classes("text-xs tracking-wider text-[#7E97B8] font-bold")
+    def pick_bank(self):
+        paths = filedialog.askopenfilenames(
+            parent=self, title="Kies bankbestand(en)",
+            filetypes=[("Bankbestanden", "*.xml *.csv *.sta *.940 *.txt"), ("Alle bestanden", "*.*")])
+        totaal = nieuw = 0
+        for path in paths:
+            with open(path, "rb") as f:
+                data = f.read()
+            try:
+                rows, fmt = import_bank.parse_any(os.path.basename(path), data)
+            except Exception as ex:
+                messagebox.showerror("Fout", f"Kan {os.path.basename(path)} niet lezen:\n{ex}", parent=self)
+                continue
+            nieuw += dbm.insert_transactions(rows, os.path.basename(path))
+            totaal += len(rows)
+        if totaal:
+            messagebox.showinfo("Import klaar",
+                                f"{totaal} transacties gevonden,\n{nieuw} nieuw toegevoegd.\n\n"
+                                f"Controleer de categorieën op de pagina Transacties.", parent=self)
+            self.navigate("transacties")
 
+    def pick_loon(self):
+        path = filedialog.askopenfilename(
+            parent=self, title="Kies loonstrook (PDF)",
+            filetypes=[("PDF", "*.pdf"), ("Alle bestanden", "*.*")])
+        if not path:
+            return
+        with open(path, "rb") as f:
+            data = f.read()
+        try:
+            fields = import_loon.parse_loonstrook_pdf(data)
+        except Exception as ex:
+            messagebox.showerror("Fout", f"Kan PDF niet lezen:\n{ex}", parent=self)
+            return
+        self.loon_dialog(os.path.basename(path), fields)
 
-def handle_bank(e):
-    name = e.name
-    data = e.content.read()
-    try:
-        rows, fmt = import_bank.parse_any(name, data)
-    except Exception as ex:
-        ui.notify(f"Kon bestand niet lezen ({fmt if isinstance(ex, ValueError) else 'fout'}): {ex}",
-                  type="negative")
-        return
-    if not rows:
-        ui.notify("Geen transacties gevonden in dit bestand.", type="warning")
-        return
-    duplicated = name
-    added = dbm.insert_transactions(rows, duplicated)
-    ui.notify(f"{fmt}: {len(rows)} transacties gevonden, {added} nieuw toegevoegd.",
-              type="positive")
+    def loon_dialog(self, name: str, fields: dict):
+        dialog = tk.Toplevel(self)
+        dialog.title("Loonstrook controleren en opslaan")
+        dialog.configure(bg=PANEL)
+        dialog.geometry("440x420")
+        dialog.transient(self)
+        tk.Label(dialog, text="Bestand: " + name, fg=MUTED, bg=PANEL,
+                 font=("Segoe UI", 9)).pack(anchor="w", padx=16, pady=(16, 0))
+        tk.Label(dialog, text="Controleer de waarden (uit de PDF gelezen)\nen pas aan indien nodig.",
+                 fg=TEXT, bg=PANEL, font=("Segoe UI", 10, "bold"), justify="left") \
+            .pack(anchor="w", padx=16, pady=(4, 8))
+        entries = {}
+        for key, label in (("period", "Periode (JJJJ-MM)"), ("brutoloon", "Brutoloon"),
+                           ("loonheffing", "Loonheffing"), ("pensioen", "Pensioenpremie"),
+                           ("vakantiegeld", "Vakantiegeld")):
+            tk.Label(dialog, text=label, fg=MUTED, bg=PANEL, font=("Segoe UI", 9)) \
+                .pack(anchor="w", padx=16, pady=(6, 0))
+            value = fields.get(key)
+            entry = tk.Entry(dialog, width=30, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                             relief="flat", bd=6)
+            entry.insert(0, "" if value is None else str(value))
+            entry.pack(anchor="w", padx=16, ipady=2)
+            entries[key] = entry
 
-
-def handle_loon(e):
-    name = e.name
-    data = e.content.read()
-    try:
-        fields = import_loon.parse_loonstrook_pdf(data)
-    except Exception as ex:
-        ui.notify(f"Kon PDF niet lezen: {ex}", type="negative")
-        return
-    show_loon_dialog(name, fields)
-
-
-def show_loon_dialog(name: str, fields: dict):
-    with ui.dialog() as dlg, ui.card().classes(f"bg-[{PANEL}] text-[{TEXT}]"):
-        ui.label("Loonstrook controleren en opslaan").classes("font-bold")
-        ui.label(f"Bestand: {name}").classes("text-sm text-[#7E97B8]")
-        ui.label("Controleer de waarden (uit de PDF gelezen) en pas aan indien nodig.") \
-            .classes("text-xs text-[#7E97B8]")
-        period = ui.input("Periode (JJJJ-MM)", value=fields["period"] or "2025-12").classes("w-full")
-        brutoloon = ui.number("Brutoloon", value=fields["brutoloon"] or 0, format="%.2f").classes("w-full")
-        loonheffing = ui.number("Loonheffing", value=fields["loonheffing"] or 0, format="%.2f") \
-            .classes("w-full")
-        pensioen = ui.number("Pensioenpremie", value=fields["pensioen"] or 0, format="%.2f").classes("w-full")
-        vakantiegeld = ui.number("Vakantiegeld", value=fields["vakantiegeld"] or 0, format="%.2f") \
-            .classes("w-full")
         def save():
-            dbm.save_loonstrook(period.value.strip(), float(brutoloon.value or 0),
-                                float(loonheffing.value or 0), float(pensioen.value or 0),
-                                float(vakantiegeld.value or 0), name)
-            dlg.close()
-            ui.navigate.reload()
-            ui.notify("Loonstrook opgeslagen.", type="positive")
-        with ui.row():
-            ui.button("Opslaan", on_click=save).props("unelevated").style(
-                f"background:{GREEN};color:#062318")
-            ui.button("Annuleren", on_click=dlg.close).props("flat")
-    dlg.open()
+            try:
+                dbm.save_loonstrook(
+                    entries["period"].get().strip(),
+                    float((entries["brutoloon"].get() or "0").replace(",", ".") or 0),
+                    float((entries["loonheffing"].get() or "0").replace(",", ".") or 0),
+                    float((entries["pensioen"].get() or "0").replace(",", ".") or 0),
+                    float((entries["vakantiegeld"].get() or "0").replace(",", ".") or 0),
+                    name)
+            except ValueError:
+                messagebox.showerror("Fout", "Bedragen moeten getallen zijn.", parent=self)
+                return
+            dialog.destroy()
+            messagebox.showinfo("Opgeslagen", "Loonstrook opgeslagen.", parent=self)
+            self.navigate("loon")
+        self.green_button(dialog, "Opslaan", save).pack(pady=16)
 
+    # ---------------- pagina: kosten ----------------
+    def page_kosten(self, root):
+        self.title_bar(root, "Kosteninzicht", "Alle kostenposten per categorie")
+        year = dbm.get_setting("huidig_jaar", "2025")
+        c = self.card(root)
+        c.pack(fill="both", expand=True, padx=16, pady=6)
+        tk.Label(c, text=f"Uitgaven per categorie {year} — groen = vast, blauw = variabel",
+                 font=("Segoe UI", 10, "bold"), fg=TEXT, bg=CARD).pack(anchor="w", padx=14, pady=(10, 0))
+        canvas = tk.Canvas(c, bg=CARD, highlightthickness=0)
+        canvas.pack(fill="both", expand=True, padx=10, pady=8)
+        draw_categories_bar(canvas, year)
 
-# ------------------------- kosteninzicht -------------------------
+    # ---------------- pagina: loonstrookjes ----------------
+    def page_loon(self, root):
+        self.title_bar(root, "Loonstrookjes", "Laad PDF's in via Import, of vul hieronder handmatig aan")
+        c = self.card(root)
+        c.pack(fill="x", padx=16, pady=6)
+        row = tk.Frame(c, bg=CARD)
+        row.pack(fill="x", padx=14, pady=12)
+        entries = {}
+        for i, (key, label) in enumerate((("period", "Periode (JJJJ-MM)"), ("brutoloon", "Brutoloon"),
+                                          ("loonheffing", "Loonheffing"), ("pensioen", "Pensioen"),
+                                          ("vakantiegeld", "Vakantiegeld"))):
+            tk.Label(row, text=label, fg=MUTED, bg=CARD, font=("Segoe UI", 9)) \
+                .grid(row=0, column=i, padx=6, sticky="w")
+            e = tk.Entry(row, width=14, bg="#0A1A30", fg=TEXT, insertbackground=TEXT,
+                         relief="flat", bd=5)
+            e.grid(row=1, column=i, padx=6, ipady=2)
+            entries[key] = e
+        entries["period"].insert(0, "2025-01")
 
-@ui.page("/kosten")
-def kosten():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/kosten")
-    ui.label("Kosteninzicht").classes("text-2xl font-bold mt-2")
-    year = dbm.get_setting("huidig_jaar", "2025")
-
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full") \
-            .style("border-radius:10px"):
-        ui.label(f"Uitgaven per categorie {year}").classes("font-bold")
-        cats = dbm.q(
-            "SELECT category, COALESCE(SUM(amount),0) s, kind FROM transactions "
-            "WHERE substr(tx_date,1,4)=? AND amount<0 GROUP BY category ORDER BY s", (year,))
-        labels = [r["category"] for r in cats]
-        values = [abs(r["s"]) for r in cats]
-        kleuren = [GREEN if r["kind"] == "vast" else BLUE for r in cats]
-        ui.echart({
-            "backgroundColor": "transparent",
-            "grid": {"left": 160, "right": 40, "top": 10, "bottom": 20},
-            "xAxis": {"type": "value", "axisLabel": {"color": MUTED},
-                      "splitLine": {"show": False}},
-            "yAxis": {"type": "category", "data": labels[::-1],
-                      "axisLabel": {"color": TEXT}, "axisLine": {"lineStyle": {"color": BORDER}}},
-            "series": [{"type": "bar", "data": [
-                {"value": v, "itemStyle": {"color": c}} for v, c in zip(values[::-1], kleuren[::-1])
-            ], "barWidth": 14, "itemStyle": {"borderRadius": 7}}],
-            "tooltip": {"trigger": "axis"},
-        }).classes("w-full h-[420px]")
-
-    with ui.row().classes("w-full gap-3 flex-wrap"):
-        totaal = sum(abs(r["s"]) for r in cats) if cats else 0
-        with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow flex-1") \
-                .style("border-radius:10px"):
-            ui.label("Overzicht").classes("font-bold")
-            for r in cats:
-                pct = abs(r["s"]) / totaal * 100 if totaal else 0
-                with ui.row().classes("w-full justify-between items-center"):
-                    with ui.row().classes("items-center gap-2"):
-                        ui.icon("circle", size="xs").style(
-                            f"color:{GREEN if r['kind']=='vast' else BLUE}")
-                        ui.label(r["category"]).classes("text-sm")
-                    ui.label(f"{eur(abs(r['s']))} — {pct:.0f}%").classes("text-sm text-[#7E97B8]")
-        with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow min-w-[320px]") \
-                .style("border-radius:10px"):
-            ui.label("Vaste lasten per maand").classes("font-bold")
-            vast = dbm.q(
-                "SELECT COALESCE(SUM(amount),0) s FROM transactions "
-                "WHERE substr(tx_date,1,4)=? AND kind='vast' AND amount<0", (year,))[0]["s"]
-            ui.label(eur(abs(vast) / max(1, _maanden(year)))).classes(
-                "text-3xl font-bold mt-2").style(f"color:{GREEN}")
-            ui.label("Gemiddelde over de maanden met data").classes("text-xs text-[#7E97B8]")
-
-
-# ------------------------- loonstrookjes -------------------------
-
-@ui.page("/loon")
-def loon():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/loon")
-    ui.label("Loonstrookjes").classes("text-2xl font-bold mt-2")
-    ui.label("Laad je loonstroken (PDF) in via Import / Upload — of vul hieronder handmatig aan.") \
-        .classes("text-sm text-[#7E97B8]")
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full") \
-            .style("border-radius:10px"):
-        ui.label("Handmatig loonstrook toevoegen").classes("font-bold")
-        period = ui.input("Periode (JJJJ-MM)", value="2025-01")
-        brutoloon = ui.number("Brutoloon", value=0, format="%.2f")
-        loonheffing = ui.number("Loonheffing", value=0, format="%.2f")
-        pensioen = ui.number("Pensioenpremie", value=0, format="%.2f")
-        vakantiegeld = ui.number("Vakantiegeld", value=0, format="%.2f")
         def add():
-            dbm.save_loonstrook(period.value.strip(), float(brutoloon.value or 0),
-                                float(loonheffing.value or 0), float(pensioen.value or 0),
-                                float(vakantiegeld.value or 0), "handmatig")
-            ui.notify("Toegevoegd.", type="positive")
-            ui.navigate.reload()
-        ui.button("Toevoegen", on_click=add).props("unelevated").style(
-            f"background:{GREEN};color:#062318")
+            try:
+                dbm.save_loonstrook(
+                    entries["period"].get().strip(),
+                    float(entries["brutoloon"].get().replace(",", ".") or 0),
+                    float(entries["loonheffing"].get().replace(",", ".") or 0),
+                    float(entries["pensioen"].get().replace(",", ".") or 0),
+                    float(entries["vakantiegeld"].get().replace(",", ".") or 0),
+                    "handmatig")
+            except ValueError:
+                messagebox.showerror("Fout", "Bedragen moeten getallen zijn.", parent=self)
+                return
+            messagebox.showinfo("Toegevoegd", "Loonstrook toegevoegd.", parent=self)
+            self.navigate("loon")
+        self.green_button(row, "Toevoegen", add).grid(row=2, column=0, columnspan=5,
+                                                      sticky="w", padx=6, pady=(10, 0))
 
-    columns = [
-        {"name": "period", "label": "Periode", "field": "period", "align": "left"},
-        {"name": "brutoloon", "label": "Brutoloon", "field": "brutoloon", "align": "right"},
-        {"name": "loonheffing", "label": "Loonheffing", "field": "loonheffing", "align": "right"},
-        {"name": "pensioen", "label": "Pensioen", "field": "pensioen", "align": "right"},
-        {"name": "vakantiegeld", "label": "Vakantiegeld", "field": "vakantiegeld", "align": "right"},
-        {"name": "bron", "label": "Bron", "field": "bron", "align": "left"},
-    ]
-    data = [{
-        "period": r["period"],
-        "brutoloon": eur(r["brutoloon"]),
-        "loonheffing": eur(r["loonheffing"]),
-        "pensioen": eur(r["pensioen"]),
-        "vakantiegeld": eur(r["vakantiegeld"]),
-        "bron": r["source"],
-    } for r in dbm.q("SELECT * FROM loonstroken ORDER BY period DESC")]
-    ui.table(columns=columns, rows=data, row_key="period", pagination=12) \
-        .classes("w-full").props("dark flat")
+        wrap = tk.Frame(root, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
+        wrap.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+        cols = ("period", "brutoloon", "loonheffing", "pensioen", "vakantiegeld", "bron")
+        table = ttk.Treeview(wrap, columns=cols, show="headings", selectmode="browse")
+        for cid, text, w, anchor in (
+            ("period", "Periode", 90, "w"), ("brutoloon", "Brutoloon", 110, "e"),
+            ("loonheffing", "Loonheffing", 110, "e"), ("pensioen", "Pensioen", 110, "e"),
+            ("vakantiegeld", "Vakantiegeld", 110, "e"), ("bron", "Bron", 200, "w"),
+        ):
+            table.heading(cid, text=text)
+            table.column(cid, width=w, anchor=anchor)
+        scrollbar = ttk.Scrollbar(wrap, orient="vertical", command=table.yview)
+        table.configure(yscrollcommand=scrollbar.set)
+        table.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        style_table(table)
+        for r in dbm.q("SELECT * FROM loonstroken ORDER BY period DESC"):
+            table.insert("", "end", values=(
+                r["period"], eur(r["brutoloon"]), eur(-abs(r["loonheffing"])),
+                eur(-abs(r["pensioen"])), eur(r["vakantiegeld"]), r["source"]))
 
+    # ---------------- pagina: ib ----------------
+    def page_ib(self, root):
+        self.title_bar(root, "IB-aangifte — uitwerking",
+                       "Indicatief — controleer altijd de officiële cijfers in Mijn Belastingdienst")
+        year_sel_frame = tk.Frame(root, bg=PANEL)
+        year_sel_frame.pack(fill="x", padx=16)
+        tk.Label(year_sel_frame, text="Belastingjaar:", fg=MUTED, bg=PANEL,
+                 font=("Segoe UI", 9)).pack(side="left")
+        year_box = ttk.Combobox(year_sel_frame, values=YEARS, width=8, state="readonly")
+        year_box.set(dbm.get_setting("huidig_jaar", "2025"))
+        year_box.pack(side="left", padx=8)
 
-# ------------------------- IB-aangifte -------------------------
+        holder = tk.Frame(root, bg=PANEL)
+        holder.pack(fill="both", expand=True, padx=10, pady=8)
 
-@ui.page("/ib")
-def ib_page():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/ib")
-    ui.label("IB-aangifte — uitwerking").classes("text-2xl font-bold mt-2")
-    state = {"year": dbm.get_setting("huidig_jaar", "2025")}
+        def render():
+            for w in holder.winfo_children():
+                w.destroy()
+            result = ib.compute_year(year_box.get())
+            left = self.card(holder)
+            left.pack(side="left", fill="both", expand=True, padx=6)
+            right = self.card(holder)
+            right.pack(side="left", fill="y", padx=6, ipadx=10, ipady=10)
+            right.configure(width=320)
+            for section, rows, total in (
+                    ("BOX I — Inkomsten en aftrekposten", result["box1"], result["box1_total"]),
+                    ("BOX III — Vermogen (eindsaldo)", result["box3"], result["box3_total"])):
+                tk.Label(left, text=section, font=("Segoe UI", 10, "bold"), fg=GREEN, bg=CARD) \
+                    .pack(anchor="w", padx=16, pady=(12, 2))
+                for label, value in rows:
+                    line = tk.Frame(left, bg=CARD)
+                    line.pack(fill="x", padx=16)
+                    tk.Label(line, text=label, font=("Segoe UI", 9), fg=MUTED, bg=CARD) \
+                        .pack(side="left")
+                    tk.Label(line, text=ib.eur(value), font=("Segoe UI", 9, "bold"),
+                             fg=TEXT, bg=CARD).pack(side="right")
+                line = tk.Frame(left, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
+                line.pack(fill="x", padx=16, pady=(4, 2))
+                tk.Label(left, text="Totaal", font=("Segoe UI", 10, "bold"), fg=TEXT, bg=CARD,
+                         ).pack(side="left", padx=16)
+                tk.Label(left, text=ib.eur(total), font=("Segoe UI", 10, "bold"), fg=GREEN,
+                         bg=CARD).pack(side="right", padx=16)
+            tk.Label(right, text="VERWERKTE BRONNEN", font=("Segoe UI", 8, "bold"), fg=MUTED,
+                     bg=CARD).pack(anchor="w", padx=14, pady=(10, 2))
+            for k, v in (("Loonstroken", result["loonstroken_count"]),
+                         ("Bankafschriften (regels)", result["tx_count"])):
+                line = tk.Frame(right, bg=CARD)
+                line.pack(fill="x", padx=14)
+                tk.Label(line, text=k, font=("Segoe UI", 9), fg=MUTED, bg=CARD).pack(side="left")
+                tk.Label(line, text=str(v), font=("Segoe UI", 9, "bold"), fg=TEXT, bg=CARD) \
+                    .pack(side="right")
+            tk.Label(right, text="Tips voor januari", font=("Segoe UI", 10, "bold"),
+                     fg=TEXT, bg=CARD).pack(anchor="w", padx=14, pady=(14, 2))
+            for tip in ("Laad december-afschriften in vóór de uitwerking",
+                        "Vul eigenwoningforfait in bij Instellingen",
+                        "Controleer de categorie 'Woning / Hypotheek'"):
+                tk.Label(right, text="• " + tip, font=("Segoe UI", 8), fg=MUTED, bg=CARD,
+                         wraplength=280, justify="left").pack(anchor="w", padx=14, pady=1)
 
-    def render():
-        result = ib.compute_year(state["year"])
-        with holder_col:
-            holder_col.clear()
-            with ui.row().classes("w-full gap-3 flex-wrap"):
-                with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow flex-1 min-w-[460px]") \
-                        .style("border-radius:10px"):
-                    for section, rows, total in (
-                            ("BOX I — Inkomsten en aftrekposten", result["box1"], result["box1_total"]),
-                            ("BOX III — Vermogen (eindsaldo)", result["box3"], result["box3_total"])):
-                        with ui.row().classes("items-center gap-2 mt-3"):
-                            ui.icon("flag").classes("text-[#00FF9D]")
-                            ui.label(section).classes("font-bold")
-                        for label, value in rows:
-                            with ui.row().classes("w-full justify-between items-center"):
-                                ui.label(label).classes("text-sm text-[#7E97B8]")
-                                ui.label(ib.eur(value)).classes("text-sm font-semibold")
-                        with ui.row().classes("w-full justify-between items-center pt-1 border-t") \
-                                .style(f"border-color:{BORDER} !important;"):
-                            ui.label("Totaal").classes("font-bold")
-                            ui.label(ib.eur(total)).classes("font-bold text-[#00FF9D]")
-                    with ui.row().classes("mt-4 gap-2"):
-                        def export():
-                            csv_text = ib.export_csv(result)
-                            ui.download(csv_text.encode("utf-8"),
-                                        f"ib_uitwerking_{state['year']}.csv",
-                                        "text/csv")
-                        ui.button("Excel exporteren (CSV)", on_click=export).props("unelevated") \
-                            .style(f"background:{GREEN};color:#062318")
-                with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow min-w-[300px]") \
-                        .style("border-radius:10px"):
-                    ui.label("VERWERKTE BRONNEN").classes("text-xs tracking-wider text-[#7E97B8] font-bold")
-                    with ui.row().classes("w-full justify-between"):
-                        ui.label("Loonstroken").classes("text-sm")
-                        ui.label(f"{result['loonstroken_count']}").classes("text-sm font-bold")
-                    with ui.row().classes("w-full justify-between"):
-                        ui.label("Bankafschriften (regels)").classes("text-sm")
-                        ui.label(f"{result['tx_count']}").classes("text-sm font-bold")
-                    ui.label("Tips voor januari").classes("font-bold mt-3")
-                    for tip in ("Laad december-afschriften in vóór de uitwerking",
-                                "Vul eigenwoningforfait in bij Instellingen",
-                                "Controleer de categorie 'Woning / Hypotheek'"):
-                        ui.label(f"• {tip}").classes("text-xs text-[#7E97B8]")
+            def export():
+                path = filedialog.asksaveasfilename(
+                    parent=self, defaultextension=".csv",
+                    initialfile=f"ib_uitwerking_{year_box.get()}.csv",
+                    filetypes=[("CSV", "*.csv")])
+                if path:
+                    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                        f.write(ib.export_csv(result))
+                    messagebox.showinfo("Opgeslagen", f"CSV opgeslagen:\n{path}", parent=self)
+            self.green_button(right, "Excel exporteren (CSV)", export).pack(pady=12)
 
-    holder_col = ui.column().classes("w-full")
-    year_sel = ui.select(YEARS, value=state["year"], label="Belastingjaar",
-                         on_change=lambda e: (state.__setitem__("year", e.value), render())) \
-        .classes("w-40")
-    render()
+        def on_year(e=None):
+            render()
+        year_box.bind("<<ComboboxSelected>>", on_year)
+        render()
 
-
-# ------------------------- rapporten -------------------------
-
-@ui.page("/rapporten")
-def rapporten():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/rapporten")
-    ui.label("Rapporten & Export").classes("text-2xl font-bold mt-2")
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full max-w-2xl") \
-            .style("border-radius:10px"):
-        ui.label("Transacties exported").classes("font-bold")
-        ui.label("Alle transacties van het gekozen jaar naar CSV (Excel-compatibel).") \
-            .classes("text-sm text-[#7E97B8]")
-        year_sel = ui.select(YEARS, value=dbm.get_setting("huidig_jaar", "2025")).classes("w-40")
+    # ---------------- pagina: rapporten ----------------
+    def page_rapporten(self, root):
+        self.title_bar(root, "Rapporten & Export")
+        c = self.card(root)
+        c.pack(fill="both", expand=True, padx=16, pady=6, ipady=14)
+        tk.Label(c, text="Transacties exporteren", font=("Segoe UI", 12, "bold"),
+                 fg=TEXT, bg=CARD).pack(anchor="w", padx=16)
+        tk.Label(c, text="Alle transacties van het gekozen jaar naar CSV (Excel-compatibel).",
+                 font=("Segoe UI", 9), fg=MUTED, bg=CARD).pack(anchor="w", padx=16, pady=(2, 8))
+        year_box = ttk.Combobox(c, values=YEARS, width=8, state="readonly")
+        year_box.set(dbm.get_setting("huidig_jaar", "2025"))
+        year_box.pack(anchor="w", padx=16)
 
         def export_tx():
-            csv_text = ib.export_transactions_csv(year_sel.value)
-            ui.download(csv_text.encode("utf-8"),
-                        f"transacties_{year_sel.value}.csv", "text/csv")
-            ui.notify("Transacties geëxporteerd.", type="positive")
-        ui.button("Download transacties CSV", on_click=export_tx).props("unelevated") \
-            .style(f"background:{GREEN};color:#062318")
+            path = filedialog.asksaveasfilename(
+                parent=self, defaultextension=".csv",
+                initialfile=f"transacties_{year_box.get()}.csv", filetypes=[("CSV", "*.csv")])
+            if path:
+                with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                    f.write(ib.export_transactions_csv(year_box.get()))
+                messagebox.showinfo("Opgeslagen", f"CSV opgeslagen:\n{path}", parent=self)
+        self.green_button(c, "Download transacties CSV", export_tx).pack(anchor="w", padx=16, pady=10)
 
+    # ---------------- pagina: instellingen ----------------
+    def page_instellingen(self, root):
+        self.title_bar(root, "Instellingen", "Per jaar instelbare waarden voor de IB-uitwerking")
+        scroll = tk.Canvas(root, bg=PANEL, highlightthickness=0)
+        scroll.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(root, orient="vertical", command=scroll.yview)
+        sb.pack(side="right", fill="y")
+        scroll.configure(yscrollcommand=sb.set)
+        inner = tk.Frame(scroll, bg=PANEL)
+        scroll.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: scroll.configure(scrollregion=scroll.bbox("all")))
 
-# ------------------------- instellingen -------------------------
-
-@ui.page("/instellingen")
-def instellingen():
-    if not dbm.connected():
-        ui.navigate.to("/lock")
-        return
-    scaffold("/instellingen")
-    ui.label("Instellingen").classes("text-2xl font-bold mt-2")
-    year = dbm.get_setting("huidig_jaar", "2025")
-
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full max-w-2xl") \
-            .style("border-radius:10px"):
-        ui.label("Belasting-instellingen per jaar").classes("font-bold")
-        ui.label("Deze waarde gebruikt de IB-uitwerking (Box I en Box III).") \
-            .classes("text-sm text-[#7E97B8]")
         for y in YEARS:
-            forfait = ui.number(f"Eigenwoningforfait {y} (€)",
-                                value=float(dbm.get_setting(f"eigenwoningforfait_{y}", "0") or 0),
-                                format="%.2f").classes("w-64")
-            hypo = ui.number(f"Hypotheekrenteaftrek {y} (leeg = automatisch uit bankafschriften)",
-                             value=dbm.get_setting(f"hypotheekrente_{y}", "") or None,
-                             format="%.2f").classes("w-64")
-            beginsaldo = ui.number(f"Beginsaldo banktegoeden op 1-1-{y} (€)",
-                                   value=float(dbm.get_setting(f"beginsaldo_{y}", "0") or 0),
-                                   format="%.2f").classes("w-64")
-            schulden = ui.number(f"Schulden per 31-12-{y} (€)",
-                                 value=float(dbm.get_setting(f"schulden_{y}", "0") or 0),
-                                 format="%.2f").classes("w-64")
-            def save_slot(y=y, forfait=forfait, hypo=hypo, beginsaldo=beginsaldo, schulden=schulden):
-                dbm.set_setting(f"eigenwoningforfait_{y}", str(forfait.value or 0))
-                dbm.set_setting(f"hypotheekrente_{y}", "" if hypo.value is None else str(hypo.value))
-                dbm.set_setting(f"beginsaldo_{y}", str(beginsaldo.value or 0))
-                dbm.set_setting(f"schulden_{y}", str(schulden.value or 0))
-                ui.notify(f"Instellingen {y} opgeslagen.", type="positive")
-            ui.button(f"Opslaan {y}", on_click=save_slot).props("unelevated").classes("mt-1") \
-                .style(f"background:{GREEN};color:#062318")
+            c = self.card(inner)
+            c.pack(fill="x", padx=16, pady=6, ipady=10)
+            tk.Label(c, text=f"Belastingjaar {y}", font=("Segoe UI", 11, "bold"),
+                     fg=TEXT, bg=CARD).pack(anchor="w", padx=16)
+            fields = {}
+            for key, label, default in (
+                    (f"eigenwoningforfait_{y}", "Eigenwoningforfait (€)", ""),
+                    (f"hypotheekrente_{y}", "Hypotheekrenteaftrek (€, leeg = automatisch)", ""),
+                    (f"beginsaldo_{y}", f"Beginsaldo banktegoeden op 1-1-{y} (€)", ""),
+                    (f"schulden_{y}", f"Schulden per 31-12-{y} (€)", "")):
+                tk.Label(c, text=label, font=("Segoe UI", 8), fg=MUTED, bg=CARD) \
+                    .pack(anchor="w", padx=16, pady=(6, 0))
+                e = tk.Entry(c, width=24, bg="#0A1A30", fg=TEXT, insertbackground=TEXT,
+                             relief="flat", bd=5)
+                e.insert(0, dbm.get_setting(key, default))
+                e.pack(anchor="w", padx=16, ipady=2)
+                fields[key] = e
 
-    with ui.card().classes(f"bg-[{CARD}] border border-[{BORDER}] no-shadow w-full max-w-2xl") \
-            .style("border-radius:10px"):
-        ui.label("Data & Privacy").classes("font-bold")
-        ui.label(f"Databank: {dbm.APP_DIR / 'data.enc'}").classes("text-xs break-all text-[#7E97B8]")
-        ui.label("Je data staat versleuteld (AES-256 via Fernet, PBKDF2 300k iteraties) in je eigen "
-                 "gebruikersmap. Er wordt niets naar het internet gestuurd.") \
-            .classes("text-sm text-[#7E97B8]")
+            def save_slot(y=y, fields=fields):
+                for key, e in fields.items():
+                    dbm.set_setting(key, e.get().strip().replace(",", "."))
+                messagebox.showinfo("Opgeslagen", f"Instellingen {y} bewaard.", parent=self)
+            self.green_button(c, f"Opslaan {y}", save_slot).pack(anchor="w", padx=16, pady=(10, 0))
+
+        c2 = self.card(inner)
+        c2.pack(fill="x", padx=16, pady=6, ipady=10)
+        tk.Label(c2, text="Data & Privacy", font=("Segoe UI", 11, "bold"), fg=TEXT, bg=CARD) \
+            .pack(anchor="w", padx=16)
+        tk.Label(c2, text=f"Databank: {dbm.DATA_ENC}", font=("Segoe UI", 8), fg=MUTED,
+                 bg=CARD, wraplength=800, justify="left").pack(anchor="w", padx=16)
+        tk.Label(c2, text="Je data staat versleuteld (AES-256 via Fernet, PBKDF2 300k iteraties) op "
+                          "je eigen pc. Er wordt niets naar het internet gestuurd.",
+                 font=("Segoe UI", 9), fg=MUTED, bg=CARD, wraplength=800, justify="left") \
+            .pack(anchor="w", padx=16, pady=4)
 
         def backup():
             if dbm.DATA_ENC.exists():
-                ui.download(dbm.DATA_ENC.read_bytes(), "back-up-boekhouding.enc", "application/octet-stream")
+                path = filedialog.asksaveasfilename(
+                    parent=self, defaultextension=".enc", initialfile="back-up-boekhouding.enc")
+                if path:
+                    with open(path, "wb") as f:
+                        f.write(dbm.DATA_ENC.read_bytes())
+                    messagebox.showinfo("Back-up", f"Back-up opgeslagen:\n{path}", parent=self)
             else:
-                ui.notify("Geen databank gevonden.", type="warning")
-        ui.button("Back-up downloaden (versleuteld)", on_click=backup).props("outline")
+                messagebox.showwarning("Geen databank", "Er is nog geen databank.", parent=self)
+        self.green_button(c2, "Back-up maken (versleuteld)", backup).pack(anchor="w", padx=16, pady=(6, 0))
+
+    def on_close(self):
+        dbm.lock_down()
+        self.destroy()
 
 
-@nicegui_app.on_shutdown
-def on_shutdown():
-    dbm.lock_down()
+# ---------------- tekenfuncties voor grafieken (tk.Canvas) ----------------
+
+def draw_line_chart(canvas: tk.Canvas, year: str):
+    canvas.delete("all")
+    w = int(canvas.winfo_width() or 700)
+    h = int(canvas.winfo_height() or 230)
+    pad_l, pad_r, pad_t, pad_b = 46, 12, 14, 24
+    inc = [ib.month_income_in(year, m) for m in range(1, 13)]
+    out = [ib.month_spend_in(year, m) for m in range(1, 13)]
+    months = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+    all_vals = inc + out + [2600]
+    vmax = max(all_vals) * 1.08 or 1
+
+    def xy(i, v):
+        x = pad_l + (w - pad_l - pad_r) * i / 11
+        y = pad_t + (h - pad_t - pad_b) * (1 - v / vmax)
+        return x, y
+
+    if all(v == 0 for v in inc) and all(v == 0 for v in out):
+        tk.Label(canvas, text="Nog geen data — laad eerst een bankbestand in via Import.",
+                 fg=MUTED, bg=CARD, font=("Segoe UI", 10)).place(relx=0.5, rely=0.5, anchor="center")
+        return
+    for gy in range(5):
+        v = vmax * gy / 4
+        x1, y1 = xy(0, v), xy(0, v)[1]
+        canvas.create_line(pad_l, y1, w - pad_r, y1, fill=BORDER, dash=(2, 4))
+        canvas.create_text(pad_l - 6, y1, text=f"{v:.0f}" if vmax > 10000 else f"{v:,.0f}",
+                           fill=MUTED, font=("Segoe UI", 7), anchor="e")
+    for i, m in enumerate(months):
+        x, y = xy(i, 0)
+        x, y = x, h - pad_b
+        canvas.create_rectangle(x - 0.5, pad_t, x + 0.5, y, fill=CARD, outline="")
+        canvas.create_text(x, y + 9, text=m, fill=MUTED, font=("Segoe UI", 7))
+    pts_in = " ".join(f"{x:.0f},{y:.0f}" for x, y in [xy(i, v) for i, v in enumerate(inc)])
+    pts_out = " ".join(f"{x:.0f},{y:.0f}" for x, y in [xy(i, v) for i, v in enumerate(out)])
+    base = h - pad_b
+    canvas.create_polygon(f"{pad_l},{base} " + pts_in + f" {w - pad_r},{base}",
+                          fill=GREEN, stipple="gray25", outline="")
+    canvas.create_polygon(f"{pad_l},{base} " + pts_out + f" {w - pad_r},{base}",
+                          fill=BLUE, stipple="gray25", outline="")
+    canvas.create_line(pts_in, fill=GREEN, width=2)
+    canvas.create_line(pts_out, fill=BLUE, width=2)
+    canvas.create_text(pad_l + 4, pad_t - 4, text="— inkomsten", fill=GREEN,
+                       font=("Segoe UI", 7), anchor="w")
+    canvas.create_text(pad_l + 74, pad_t - 4, text="— uitgaven", fill=BLUE,
+                       font=("Segoe UI", 7), anchor="w")
 
 
-def main() -> None:
-    if "-no-native" in sys.argv:
-        ui.run(title="Rick's Boekhoud Programma", host="127.0.0.1", dark=True,
-               reload=False, port=8080, show=False, storage_secret="boekhoud-secret")
+def draw_donut(canvas: tk.Canvas, vast: float, variabel: float):
+    canvas.delete("all")
+    total = vast + variabel
+    w = int(canvas.winfo_width() or 320)
+    cx, cy, r1, r2 = w // 2, 110, 92, 56
+    if total <= 0:
+        tk.Label(canvas, text="Nog geen kosten ingeladen.", fg=MUTED, bg=CARD,
+                 font=("Segoe UI", 9)).place(relx=0.5, rely=0.45, anchor="center")
+        canvas.create_text(cx, cy, text="—", fill=TEXT, font=("Segoe UI", 16, "bold"))
+        canvas.create_text(cx, cy + 20, text="kosten p/m", fill=MUTED, font=("Segoe UI", 8))
     else:
-        ui.run(title="Rick's Boekhoud Programma", host="127.0.0.1", dark=True,
-               native=True, window_size=(1280, 720), reload=False, show=False,
-               storage_secret="boekhoud-secret")
+        start = 90
+        for value, color in ((vast, GREEN), (variabel, BLUE)):
+            extent = -360 * (value / total)
+            canvas.create_arc(cx - r1, cy - r1, cx + r1, cy + r1, start=start, extent=extent,
+                              style="pieslice", fill=color, outline=CARD, width=3)
+            start += extent
+        tk.Label(canvas, text="").place(x=0, y=0)
+        canvas.create_oval(cx - r2, cy - r2, cx + r2, cy + r2, fill=CARD, outline=CARD)
+        canvas.create_text(cx, cy - 10, text=eur(total / 12), fill=TEXT,
+                           font=("Segoe UI", 13, "bold"))
+        canvas.create_text(cx, cy + 8, text="kosten p/m", fill=MUTED, font=("Segoe UI", 8))
+    base_y = (canvas.winfo_height() or 200) - 16
+    canvas.create_text(16, base_y, text="● Vast", fill=GREEN,
+                       font=("Segoe UI", 8), anchor="w")
+    canvas.create_text(90, base_y, text="● Variabel", fill=BLUE, font=("Segoe UI", 8), anchor="w")
 
 
-if __name__ in {"__main__", "__mp_main__"}:
+def draw_top_categories(canvas: tk.Canvas, year: str):
+    canvas.delete("all")
+    w = int(canvas.winfo_width() or 900)
+    h = int(canvas.winfo_height() or 180)
+    cats = dbm.q(
+        "SELECT category, COALESCE(SUM(amount),0) s FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount<0 GROUP BY category ORDER BY s LIMIT 6", (year,))
+    if not cats:
+        tk.Label(canvas, text="Nog geen uitgaven ingeladen.", fg=MUTED, bg=CARD,
+                 font=("Segoe UI", 10)).place(relx=0.5, rely=0.5, anchor="center")
+        return
+    values = [abs(r["s"]) for r in cats]
+    vmax = max(values) or 1
+    pad_l = 170
+    bar_h = 16
+    gap = (h - 12) / max(1, len(cats))
+    for i, (r, v) in enumerate(zip(cats, values)):
+        y = 8 + i * gap
+        x_end = pad_l + (w - pad_l - 60) * v / vmax
+        color = GREEN if r["kind"] == "vast" else BLUE
+        canvas.create_rectangle(pad_l, y, x_end, y + bar_h, fill=color, outline="")
+        canvas.create_text(pad_l - 10, y + bar_h // 2, text=r["category"][:24], fill=TEXT,
+                           font=("Segoe UI", 8), anchor="e")
+        canvas.create_text(x_end + 8, y + bar_h // 2, text=f"{v / values[0] * 100:.0f}%"
+                           if values[0] else "", fill=MUTED, font=("Segoe UI", 8), anchor="w")
+
+
+def draw_categories_bar(canvas: tk.Canvas, year: str):
+    canvas.delete("all")
+    w = int(canvas.winfo_width() or 900)
+    h = int(canvas.winfo_height() or 400)
+    cats = dbm.q(
+        "SELECT category, COALESCE(SUM(amount),0) s, kind FROM transactions "
+        "WHERE substr(tx_date,1,4)=? AND amount<0 GROUP BY category ORDER BY s", (year,))
+    if not cats:
+        tk.Label(canvas, text="Nog geen uitgaven ingeladen — gebruik Import / Upload.",
+                 fg=MUTED, bg=CARD, font=("Segoe UI", 10)).place(relx=0.5, rely=0.5, anchor="center")
+        return
+    values = [abs(r["s"]) for r in cats]
+    vmax = max(values) or 1
+    pad_l = 190
+    gap = (h - 20) / len(cats)
+    bar_h = min(18, gap * 0.6)
+    for i, (r, v) in enumerate(zip(cats, values)):
+        y = 12 + i * gap
+        x_end = pad_l + (w - pad_l - 70) * v / vmax
+        color = GREEN if r["kind"] == "vast" else BLUE
+        canvas.create_rectangle(pad_l, y, x_end, y + bar_h, fill=color, outline="")
+        canvas.create_text(pad_l - 10, y + bar_h / 2, text=r["category"][:26], fill=TEXT,
+                           font=("Segoe UI", 8), anchor="e")
+        canvas.create_text(x_end + 8, y + bar_h / 2, text=f"{eur(v)}  ({v / values[0] * 100:.0f}%"
+                           if values[0] else eur(v), fill=MUTED, font=("Segoe UI", 8), anchor="w")
+
+
+def style_table(table: ttk.Treeview):
+    style = ttk.Style(table)
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+    style.configure("Treeview", background=CARD, foreground=TEXT, fieldbackground=CARD,
+                    bordercolor=BORDER, borderwidth=0, rowheight=26, font=("Segoe UI", 9))
+    style.configure("Treeview.Heading", background="#0A1A30", foreground=MUTED,
+                    font=("Segoe UI", 8, "bold"), borderwidth=0, relief="flat")
+    style.map("Treeview", background=[("selected", "#153055")],
+              foreground=[("selected", GREEN)])
+    style.map("Treeview.Heading", background=[("active", "#0A1A30")])
+    table.tag_configure("in", foreground=GREEN)
+    table.tag_configure("out", foreground=TEXT)
+
+
+def main():
+    app = App()
+    app.protocol("WM_DELETE_WINDOW", app.on_close)
+    app.mainloop()
+
+
+if __name__ == "__main__":
     main()

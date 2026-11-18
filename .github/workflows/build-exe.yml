@@ -22,9 +22,9 @@ jobs:
           pip install pyinstaller
       - name: Bouw exe
         run: |
-          nicegui-pack --onefile --name "RicksBoekhoudProgramma" app\main.py
+          pyinstaller --onefile --noconsole --name "RicksBoekhoudProgramma" app\main.py
       - name: Upload exe als artefact
         uses: actions/upload-artifact@v4
         with:
           name: Rick-s-Boekhoud-Programma-exe
-          path: dist/RicksBoekhoudProgramma.exe
+          path: dist\RicksBoekhoudProgramma.exe
